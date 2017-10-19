@@ -3,3 +3,6 @@
 ################################################################################
 
 /.vs
+/ConsoleApplication1/bin/Debug
+/ConsoleApplication1/obj/x86/Debug
+/packages

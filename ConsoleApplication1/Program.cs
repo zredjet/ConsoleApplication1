@@ -30,7 +30,6 @@ namespace ConsoleApplication1
 
     public class DocumentAnalyzer
     {
-        //string solutionPath = @"C:\Users\redjet\source\repos\zip-test-stellaris\zip-test-stellaris.sln";
         string solutionPath = @"C:\Users\redjet\source\repos\WindowsFormsApp1\WindowsFormsApp1.sln";
 
         public async void Execute1Async()
