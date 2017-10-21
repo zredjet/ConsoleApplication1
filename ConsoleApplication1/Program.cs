@@ -15,6 +15,8 @@ namespace ConsoleApplication1
     using System.Threading.Tasks;
     using CsvHelper;
     using System.IO;
+    using CommandLine;
+    using CommandLine.Text;
 
     #endregion
 
@@ -22,28 +24,86 @@ namespace ConsoleApplication1
     {
         private static void Main(string[] args)
         {
-            //
-            var da = new DocumentAnalyzer();
-            da.Execute1Async();
+            var da = new DocumentAnalyzer(args);
+            da.Execute();
         }
     }
 
     public class DocumentAnalyzer
     {
-        string solutionPath = @"C:\Users\redjet\source\repos\WindowsFormsApp1\WindowsFormsApp1.sln";
+        private ParserResult<CommandLineOptions> _parserResult;
+        private CommandLineOptions _options;
 
-        public async void Execute1Async()
+        public DocumentAnalyzer(string[] args)
         {
-            var csvFilePath = @"aaa.csv";
-            var csvAR = new CsvAnalyzerResult();
-            csvAR.SetFilePath(csvFilePath);
-            if (File.Exists(csvFilePath))
+            _parserResult = Parser.Default.ParseArguments<CommandLineOptions>(args);
+        }
+
+        public void Execute()
+        {
+            _parserResult.WithParsed(options => _options = options);
+            if (ValidateOptions())
             {
-                //
+                var aaa = this.Execute1Async();
+            }
+            else
+            {
+                Console.WriteLine("処理失敗\r\n" +
+                    " - オプションの指定に誤りがあります。\r\n" +
+                    " - ”-help” で確認してください。");
+            }
+        }
+
+        public bool ValidateOptions()
+        {
+            //
+            if (_options == null)
+            {
+                Console.WriteLine("引数が指定されていません。");
+                return false;
+            }
+
+            //
+            if (!String.IsNullOrEmpty(_options.SolutionPath))
+            {
+                if (!File.Exists(_options.SolutionPath))
+                {
+                    Console.WriteLine("ソリューションファイルが存在しません。");
+                    return false;
+                }
+            }
+
+            //
+            if (!String.IsNullOrEmpty(_options.CSProjectPath))
+            {
+                if (!File.Exists(_options.CSProjectPath))
+                {
+                    Console.WriteLine("プロジェクトファイルが存在しません。");
+                    return false;
+                }
+            }
+
+            //
+            if (String.IsNullOrEmpty(_options.SolutionPath) && String.IsNullOrEmpty(_options.CSProjectPath))
+            {
+                Console.WriteLine("ソリューションファイルか、プロジェクトファイルのどちらかを指定してください。");
+            }
+
+            return true;
+        }
+
+        public async Task<bool> Execute1Async()
+        {
+            var csvAR = new CsvAnalyzerResult();
+            csvAR.CsvFilePath = _options.OutputPath;
+
+            if (File.Exists(_options.OutputPath))
+            {
+                // 前回分
                 var en = csvAR.ReadAll<AnalyzeResult>();
                 var tempList = en.Any() ? en.ToList() : new List<AnalyzeResult>();
                 csvAR.CloseReader();
-                //
+                // 追加
                 csvAR.InitializeCsvWriter();
                 csvAR.InitializeHeader<AnalyzeResult>();
                 csvAR.WriteList<AnalyzeResult>(tempList);
@@ -57,92 +117,102 @@ namespace ConsoleApplication1
             //
             var aList = new List<AnalyzeResult>();
 
-            //
-            var msWorkspace = MSBuildWorkspace.Create();
-            var solution = msWorkspace.OpenSolutionAsync(solutionPath).Result;
-            foreach (var project in solution.Projects)
+            //ソリューションファイル
+            if (!String.IsNullOrEmpty(_options.SolutionPath))
             {
-                foreach (var document in project.Documents)
+                var msWorkspace = MSBuildWorkspace.Create();
+                var solution = msWorkspace.OpenSolutionAsync(_options.SolutionPath).Result;
+
+                foreach (var project in solution.Projects)
                 {
-                    //Console.WriteLine("■" + project.Name + "\t\t\t" + document.Name);
-
-                    var tree1 = document.GetSyntaxTreeAsync();
-                    tree1.Wait();
-                    var tree2 = await tree1;
-
-                    var model1 = document.GetSemanticModelAsync();
-                    model1.Wait();
-                    var model2 = await model1;
-
-                    var root1 = document.GetSyntaxRootAsync();
-                    root1.Wait();
-                    var root2 = await root1;
-
-                    var simpleAccess = tree2.GetRoot().DescendantNodes().OfType<MemberAccessExpressionSyntax>();
-                    foreach (var n in simpleAccess)
-                    {
-                        var ts = model2.GetTypeInfo(n.Expression).Type?.ToString();
-                        //var ts = t != null ? t.ToString() : "";
-                        if (String.IsNullOrEmpty(ts) || !ts.Contains("System.Windows.Forms")) { continue; }
-
-                        //Console.WriteLine(" * " + n.Expression + "." + n.Name);
-                        //Console.WriteLine("\t" + "SSSEEE - " + model2.GetTypeInfo(n.Expression).Type);
-                        //Console.WriteLine("\t" + "SSSNNN - " + model2.GetTypeInfo(n.Name).Type);
-                        //Console.WriteLine("\t" + "SSSNN2 - " + model2.GetSymbolInfo(n.Name).Symbol.ContainingType?.ToString());
-
-                        var ar = new AnalyzeResult();
-                        ar.ProjectName = project.Name;
-                        ar.SrcFilePath = document.FilePath;
-                        ar.LineNumberSt = tree2.GetLineSpan(n.FullSpan).StartLinePosition.Line;
-                        ar.LineNumberEd = tree2.GetLineSpan(n.FullSpan).EndLinePosition.Line;
-                        ar.TypeString = model2.GetTypeInfo(n.Expression).Type.ToString();
-                        ar.Name = n.Name.ToString();
-                        ar.RawString = n.ToString();
-                        aList.Add(ar);
-                    }
-
-                    #region gomi
-                    //var methodSyntax = tree2.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().First();
-                    //foreach (var node in tree2.GetRoot().DescendantNodes())
-                    //{
-                    //    Console.WriteLine(node.ToString());
-                    //}
-                    //var methodSymbol = model2.GetDeclaredSymbol(methodSyntax);
-
-                    //Console.WriteLine(methodSymbol.ToString());
-                    //Console.WriteLine(methodSymbol.ContainingSymbol);
-                    //Console.WriteLine(methodSymbol.IsAbstract);
-
-                    //var classDeclaration = tree2.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>();
-                    //foreach (var n in classDeclaration)
-                    //{
-                    //    Console.WriteLine("CD - " + n.Identifier.Text);
-                    //}
-
-                    //var methodDeclaration = tree2.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>();
-                    //foreach (var n in methodDeclaration)
-                    //{
-                    //    Console.WriteLine("MD - " + n.Identifier.ToString());
-                    //    Console.WriteLine("MD - " + n.Identifier.ToString());
-                    //}
-
-                    //var methodBindDeclaration = tree2.GetRoot().DescendantNodes().OfType<AnonymousMethodExpressionSyntax>();
-                    //foreach (var n in methodBindDeclaration)
-                    //{
-                    //    Console.WriteLine("MB - " + n.ToString());
-                    //}
-
-                    //var fields = tree2.GetRoot().DescendantNodes().OfType<FieldDeclarationSyntax>();
-                    //foreach (var n in fields)
-                    //{
-                    //    Console.WriteLine("Fie - " + n.Declaration.Type.ToString());
-                    //}
-                    #endregion
+                    var tempList = GetSpecifiedIdentifierNameResult(project).Result;
+                    if (tempList.Count != 0) aList.AddRange(tempList);
                 }
             }
 
+            // プロジェクトファイル
+            if (!String.IsNullOrEmpty(_options.CSProjectPath))
+            {
+                var msWorkspace = MSBuildWorkspace.Create();
+                var project = msWorkspace.OpenProjectAsync(_options.CSProjectPath).Result;
+
+                var tempList = GetSpecifiedIdentifierNameResult(project).Result;
+                if (tempList.Count != 0) aList.AddRange(tempList);
+            }
+
+            // CSVへ書き込み。
             csvAR.WriteList<AnalyzeResult>(aList);
             csvAR.CloseWriter();
+
+            return true;
+        }
+
+        public async Task<List<AnalyzeResult>> GetSpecifiedIdentifierNameResult(Microsoft.CodeAnalysis.Project project)
+        {
+            var aList = new List<AnalyzeResult>();
+
+            foreach (var document in project.Documents)
+            {
+                if (_options.Verbose)
+                    Console.WriteLine("■" + project.Name + "\t\t\t" + document.Name);
+
+                // ただの同期取得。
+                var tree2 = document.GetSyntaxTreeAsync().Result;
+                var model2 = document.GetSemanticModelAsync().Result;
+                //var root2 = await document.GetSyntaxRootAsync().ConfigureAwait(false);
+
+                var identifierName = tree2.GetRoot().DescendantNodes().OfType<IdentifierNameSyntax>();
+                foreach (var n in identifierName)
+                {
+                    if (_options.Verbose)
+                    {
+                        Console.WriteLine(" * IdentifierNameSyntax * " + n.ToString());
+                        Console.WriteLine("\t" + "TYPE   - " + model2.GetTypeInfo(n).Type);
+                        Console.WriteLine("\t" + "SYMBOL - " + model2.GetSymbolInfo(n).Symbol.ContainingType?.ToString());
+                    }
+
+                    var ts = model2.GetTypeInfo(n).Type?.ToString();
+                    var ts2 = model2.GetSymbolInfo(n).Symbol.ContainingType?.ToString();
+
+                    string typeString = ts;
+                    string symbolString = ts2;
+                    string targetString = "";
+                    if (String.IsNullOrEmpty(ts) || !ts.Contains(_options.FindNameSpace) || !ts.StartsWith(_options.FindNameSpace))
+                    {
+                        if (String.IsNullOrEmpty(ts2) || !ts2.Contains(_options.FindNameSpace) || !ts2.StartsWith(_options.FindNameSpace))
+                        {
+                            continue;
+                        }
+                    }
+                    else {; }
+                    if (!String.IsNullOrEmpty(symbolString) && symbolString.Contains(_options.FindNameSpace))
+                    {
+                        targetString = symbolString + "." + n.ToString();
+                    }
+                    else
+                    {
+                        targetString = typeString;
+                    }
+
+                    var ar = new AnalyzeResult
+                    {
+                        ProjectName = project.Name,
+                        SrcFilePath = document.FilePath,
+                        LineNumberSt = tree2.GetLineSpan(n.FullSpan).StartLinePosition.Line,
+                        LineNumberEd = tree2.GetLineSpan(n.FullSpan).EndLinePosition.Line,
+                        SymbolString = symbolString,
+                        TypeString = typeString,
+                        TargetString = targetString,
+                        IsMethod = model2.GetTypeInfo(n).Type == null ? "*" : "",
+                        Name = n.ToString(),
+                        RawString = n.Parent.ToString(),
+                    };
+
+                    aList.Add(ar);
+                }
+            }
+
+            return aList;
         }
     }
 
@@ -153,7 +223,10 @@ namespace ConsoleApplication1
         public string SrcFilePath { get; set; }
         public int LineNumberSt { get; set; }
         public int LineNumberEd { get; set; }
+        public string SymbolString { get; set; }
         public string TypeString { get; set; }
+        public string TargetString { get; set; }
+        public string IsMethod { get; set; }
         public string Name { get; set; }
         public string RawString { get; set; }
         #endregion
@@ -166,16 +239,15 @@ namespace ConsoleApplication1
     public class CsvAnalyzerResult
     {
         #region プロパティ
-        public TextReader TextFileReader { get; set; }
-        public TextWriter TextFileWriter { get; set; }
-        public CsvReader CsvAnalyzerResultReader { get; set; }
-        public CsvWriter CsvAnalyzerResultWriter { get; set; }
+        public String CsvFilePath { get => this._csvFilePath; set => this._csvFilePath = value; }
         #endregion
 
         #region フィールド
-
-        private String csvFilePath = "";
-
+        private TextReader _textFileReader { get; set; }
+        public TextWriter _textFileWriter { get; set; }
+        public CsvReader _csvAnalyzerResultReader { get; set; }
+        public CsvWriter _csvAnalyzerResultWriter { get; set; }
+        private String _csvFilePath = "";
         #endregion
 
         #region コンストラクタ
@@ -183,33 +255,60 @@ namespace ConsoleApplication1
         #endregion
 
         #region メソッド
-        public void SetFilePath(string path) { this.csvFilePath = path; }
-        public void InitializeCsvWriter() { TextFileWriter = new StreamWriter(csvFilePath); CsvAnalyzerResultWriter = new CsvWriter(TextFileWriter); }
+        public void InitializeCsvWriter() { _textFileWriter = new StreamWriter(_csvFilePath); _csvAnalyzerResultWriter = new CsvWriter(_textFileWriter); }
         public void CloseWriter()
         {
-            CsvAnalyzerResultWriter.Flush();
-            CsvAnalyzerResultWriter.Dispose();
-            CsvAnalyzerResultWriter = null;
-            TextFileWriter.Close();
-            TextFileWriter = null;
+            _csvAnalyzerResultWriter.Flush();
+            _csvAnalyzerResultWriter.Dispose();
+            _csvAnalyzerResultWriter = null;
+            _textFileWriter.Close();
+            _textFileWriter = null;
         }
-        public void WriteList<T>(List<T> list) { CsvAnalyzerResultWriter.WriteRecords(list); }
-        public void InitializeHeader<T>() { CsvAnalyzerResultWriter.WriteHeader<T>(); CsvAnalyzerResultWriter.NextRecord(); }
-        public void Flush() { CsvAnalyzerResultWriter.Flush(); }
+        public void WriteList<T>(List<T> list) { _csvAnalyzerResultWriter.WriteRecords(list); }
+        public void InitializeHeader<T>() { _csvAnalyzerResultWriter.WriteHeader<T>(); _csvAnalyzerResultWriter.NextRecord(); }
+        public void Flush() { _csvAnalyzerResultWriter.Flush(); }
         public IEnumerable<T> ReadAll<T>()
         {
             try
             {
-                if (!File.Exists(csvFilePath)) return null;
-                TextFileReader = new StreamReader(csvFilePath);
-                CsvAnalyzerResultReader = new CsvReader(TextFileReader);
-                return CsvAnalyzerResultReader.GetRecords<T>();
+                if (!File.Exists(_csvFilePath)) return null;
+                _textFileReader = new StreamReader(_csvFilePath);
+                _csvAnalyzerResultReader = new CsvReader(_textFileReader);
+                return _csvAnalyzerResultReader.GetRecords<T>();
             }
             finally
             {
             }
         }
-        public void CloseReader() { CsvAnalyzerResultReader.Dispose(); CsvAnalyzerResultReader = null; TextFileReader.Close(); TextFileReader = null; }
+        public void CloseReader() { _csvAnalyzerResultReader.Dispose(); _csvAnalyzerResultReader = null; _textFileReader.Close(); _textFileReader = null; }
         #endregion
+    }
+
+    public class CommandLineOptions
+    {
+        [Option('s', "sln",
+            Default = "",
+            HelpText = "ソリューションファイルのパスを指定してください。")]
+        public string SolutionPath { get; set; }
+
+        [Option('c', "csproj",
+            Default = "",
+            HelpText = "プロジェクトファイルのパスを指定してください。")]
+        public string CSProjectPath { get; set; }
+
+        [Option('v', "vervose", HelpText = "デバッグ情報を出力したい場合に指定してください。")]
+        public bool Verbose { get; set; }
+
+        [Option('o', "output",
+            Default = "temp.csv",
+            HelpText = "出力するファイル名を指定してください。")]
+        public string OutputPath { get; set; }
+
+        [Value(0,
+            Required = true,
+            Default = "",
+            HelpText = "対象とする名前空間を指定してください。")]
+        public string FindNameSpace { get; set; }
+
     }
 }
