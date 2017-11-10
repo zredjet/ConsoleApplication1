@@ -177,38 +177,41 @@ namespace ConsoleApplication1
                     string typeString = ts;
                     string symbolString = ts2;
                     string targetString = "";
-                    if (String.IsNullOrEmpty(ts) || !ts.Contains(_options.FindNameSpace) || !ts.StartsWith(_options.FindNameSpace))
+                    foreach (var nameSpace in _options.FindNameSpace)
                     {
-                        if (String.IsNullOrEmpty(ts2) || !ts2.Contains(_options.FindNameSpace) || !ts2.StartsWith(_options.FindNameSpace))
+                        if (String.IsNullOrEmpty(ts) || !ts.Contains(nameSpace) || !ts.StartsWith(nameSpace))
                         {
-                            continue;
+                            if (String.IsNullOrEmpty(ts2) || !ts2.Contains(nameSpace) || !ts2.StartsWith(nameSpace))
+                            {
+                                continue;
+                            }
                         }
-                    }
-                    else {; }
-                    if (!String.IsNullOrEmpty(symbolString) && symbolString.Contains(_options.FindNameSpace))
-                    {
-                        targetString = symbolString + "." + n.ToString();
-                    }
-                    else
-                    {
-                        targetString = typeString;
-                    }
 
-                    var ar = new AnalyzeResult
-                    {
-                        ProjectName = project.Name,
-                        SrcFilePath = document.FilePath,
-                        LineNumberSt = tree2.GetLineSpan(n.FullSpan).StartLinePosition.Line,
-                        LineNumberEd = tree2.GetLineSpan(n.FullSpan).EndLinePosition.Line,
-                        SymbolString = symbolString,
-                        TypeString = typeString,
-                        TargetString = targetString,
-                        IsMethod = model2.GetTypeInfo(n).Type == null ? "*" : "",
-                        Name = n.ToString(),
-                        RawString = n.Parent.ToString(),
-                    };
+                        if (!String.IsNullOrEmpty(symbolString) && symbolString.Contains(nameSpace))
+                        {
+                            targetString = symbolString + "." + n.ToString();
+                        }
+                        else
+                        {
+                            targetString = typeString;
+                        }
 
-                    aList.Add(ar);
+                        var ar = new AnalyzeResult
+                        {
+                            ProjectName = project.Name,
+                            SrcFilePath = document.FilePath,
+                            LineNumberSt = tree2.GetLineSpan(n.FullSpan).StartLinePosition.Line,
+                            LineNumberEd = tree2.GetLineSpan(n.FullSpan).EndLinePosition.Line,
+                            SymbolString = symbolString,
+                            TypeString = typeString,
+                            TargetString = targetString,
+                            IsMethod = model2.GetTypeInfo(n).Type == null ? "*" : "",
+                            Name = n.ToString(),
+                            RawString = n.Parent.ToString(),
+                        };
+
+                        aList.Add(ar);
+                    }
                 }
             }
 
@@ -308,7 +311,7 @@ namespace ConsoleApplication1
             Required = true,
             Default = "",
             HelpText = "ëŒè€Ç∆Ç∑ÇÈñºëOãÛä‘ÇéwíËÇµÇƒÇ≠ÇæÇ≥Ç¢ÅB")]
-        public string FindNameSpace { get; set; }
+        public IEnumerable<string> FindNameSpace { get; set; }
 
     }
 }

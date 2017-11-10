@@ -4,6 +4,6 @@
     <StartArguments>-s "WindowsFormsApp1\WindowsFormsApp1.sln" "System.Windows.Forms"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
-    <StartArguments>-s "C:\temp\WindowsFormsApp1\WindowsFormsApp1.sln" -v "System.Windows.Forms"</StartArguments>
+    <StartArguments>-s "C:\temp\WindowsFormsApp1\WindowsFormsApp1.sln" -v "System.Windows.Forms" "Aiueo"</StartArguments>
   </PropertyGroup>
 </Project>
